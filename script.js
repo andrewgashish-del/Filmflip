@@ -1,23 +1,47 @@
 // FilmFlip - Movie Randomizer for GitHub Pages
 // Uses TMDb API for movie data
 
+// ============================================
+// 🔑 ВСТАВЬТЕ ВАШ API КЛЮЧ НИЖЕ
+// ============================================
+const API_KEY = 'YOUR_TMDB_API_KEY_HERE'; // Замените на ваш API ключ от TMDb
+// ============================================
+
 // Configuration
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 const LANGUAGE = 'ru-RU';
 const REGION = 'RU';
 
+// TMDb Genre IDs mapping (Russian -> ID)
+const GENRE_IDS = {
+    'Боевик': 28,
+    'Приключения': 12,
+    'Анимация': 16,
+    'Комедия': 35,
+    'Криминал': 80,
+    'Документальный': 99,
+    'Драма': 18,
+    'Семейный': 10751,
+    'Фэнтези': 14,
+    'История': 36,
+    'Ужасы': 27,
+    'Музыка': 10402,
+    'Мистика': 9648,
+    'Мелодрама': 10749,
+    'Фантастика': 878,
+    'Триллер': 53,
+    'Военный': 10752,
+    'Вестерн': 37
+};
+
 // State
-let apiKey = localStorage.getItem('tmdb_api_key') || '';
+let apiKey = API_KEY !== 'YOUR_TMDB_API_KEY_HERE' ? API_KEY : (localStorage.getItem('tmdb_api_key') || '');
 let genres = [];
 let currentMovie = null;
 
 // DOM Elements
 const elements = {
-    apiKeyModal: document.getElementById('apiKeyModal'),
-    apiKeyInput: document.getElementById('apiKeyInput'),
-    saveApiKeyBtn: document.getElementById('saveApiKeyBtn'),
-    skipApiBtn: document.getElementById('skipApiBtn'),
     genreSelect: document.getElementById('genreSelect'),
     decadeSelect: document.getElementById('decadeSelect'),
     ratingSlider: document.getElementById('ratingSlider'),
@@ -50,9 +74,8 @@ document.addEventListener('DOMContentLoaded', init);
 async function init() {
     // Check if API key exists
     if (!apiKey) {
-        elements.apiKeyModal.classList.remove('hidden');
+        showApiInstructions();
     } else {
-        elements.apiKeyModal.classList.add('hidden');
         await loadGenres();
     }
 
@@ -60,19 +83,13 @@ async function init() {
     setupEventListeners();
 }
 
-function setupEventListeners() {
-    // API Key modal
-    elements.saveApiKeyBtn.addEventListener('click', saveApiKey);
-    elements.skipApiBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        elements.apiKeyModal.classList.add('hidden');
-        elements.filtersSection.classList.add('hidden');
-        showError('⚠️ Демо-режим: Введите API ключ для полной функциональности');
-    });
-    elements.apiKeyInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') saveApiKey();
-    });
+function showApiInstructions() {
+    // Show message that API key is needed
+    elements.filtersSection.classList.add('hidden');
+    showError('⚠️ Для работы сайта нужен API ключ от TMDb. Откройте script.js и вставьте ваш ключ в переменную API_KEY.<br><br><a href="https://www.themoviedb.org/settings/api" target="_blank" style="color: var(--accent-primary);">Получить API ключ</a>');
+}
 
+function setupEventListeners() {
     // Rating slider
     elements.ratingSlider.addEventListener('input', (e) => {
         elements.ratingValue.textContent = e.target.value;
@@ -87,18 +104,6 @@ function setupEventListeners() {
     elements.trailerBtn.addEventListener('click', openTrailer);
     elements.expandOverviewBtn.addEventListener('click', toggleOverview);
     elements.shareBtn.addEventListener('click', shareMovie);
-}
-
-function saveApiKey() {
-    const key = elements.apiKeyInput.value.trim();
-    if (key) {
-        apiKey = key;
-        localStorage.setItem('tmdb_api_key', key);
-        elements.apiKeyModal.classList.add('hidden');
-        loadGenres();
-    } else {
-        alert('Пожалуйста, введите API ключ');
-    }
 }
 
 async function loadGenres() {
@@ -128,7 +133,7 @@ function populateGenreSelect() {
 
 async function findMovie(isLucky = false) {
     if (!apiKey) {
-        elements.apiKeyModal.classList.remove('hidden');
+        showApiInstructions();
         return;
     }
 
@@ -141,72 +146,135 @@ async function findMovie(isLucky = false) {
         let movieId;
         
         if (isLucky) {
-            // Completely random movie
-            const randomPage = Math.floor(Math.random() * 500) + 1;
-            const discoverUrl = `${TMDB_BASE_URL}/discover/movie?api_key=${apiKey}&language=${LANGUAGE}&sort_by=popularity.desc&page=${randomPage}`;
-            const response = await fetch(discoverUrl);
-            const data = await response.json();
-            
-            if (data.results && data.results.length > 0) {
-                const randomIndex = Math.floor(Math.random() * data.results.length);
-                movieId = data.results[randomIndex].id;
+            // Completely random movie - try multiple pages to find something
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const randomPage = Math.floor(Math.random() * 100) + 1;
+                const discoverUrl = `${TMDB_BASE_URL}/discover/movie?api_key=${apiKey}&language=${LANGUAGE}&sort_by=popularity.desc&page=${randomPage}`;
+                const response = await fetch(discoverUrl);
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * data.results.length);
+                    movieId = data.results[randomIndex].id;
+                    break;
+                }
             }
         } else {
-            // Filtered random movie
-            const params = new URLSearchParams({
-                api_key: apiKey,
-                language: LANGUAGE,
-                sort_by: 'popularity.desc',
-                'vote_count.gte': '100',
-                include_adult: 'false'
-            });
-
-            // Add genre filter
-            const selectedGenre = elements.genreSelect.value;
-            if (selectedGenre) {
-                params.append('with_genres', selectedGenre);
-            }
-
-            // Add decade filter
-            const selectedDecade = elements.decadeSelect.value;
-            if (selectedDecade) {
-                const startYear = selectedDecade;
-                const endYear = parseInt(selectedDecade) + 9;
-                params.append('primary_release_date.gte', `${startYear}-01-01`);
-                params.append('primary_release_date.lte', `${endYear}-12-31`);
-            }
-
-            // Add rating filter
-            const minRating = parseFloat(elements.ratingSlider.value);
-            if (minRating > 0) {
-                params.append('vote_average.gte', minRating);
-            }
-
-            // Get random page
-            const randomPage = Math.floor(Math.random() * 50) + 1;
-            params.append('page', randomPage);
-
-            const discoverUrl = `${TMDB_BASE_URL}/discover/movie?${params.toString()}`;
-            const response = await fetch(discoverUrl);
-            const data = await response.json();
-
-            if (data.results && data.results.length > 0) {
-                const randomIndex = Math.floor(Math.random() * data.results.length);
-                movieId = data.results[randomIndex].id;
-            } else {
-                throw new Error('Фильмы не найдены с выбранными фильтрами. Попробуйте изменить параметры.');
-            }
+            // Filtered random movie with 3 attempts expanding filters
+            movieId = await findMovieWithFilterExpansion();
         }
 
         if (movieId) {
             await loadMovieDetails(movieId);
         } else {
-            throw new Error('Не удалось найти фильм. Попробуйте ещё раз!');
+            // Fallback: show popular movies
+            await showFallbackPopularMovies();
         }
 
     } catch (error) {
         console.error('Error finding movie:', error);
         showError(error.message || 'Произошла ошибка при поиске фильма');
+    }
+}
+
+/**
+ * Поиск фильма с постепенным расширением фильтров (3 попытки)
+ */
+async function findMovieWithFilterExpansion() {
+    const selectedGenre = elements.genreSelect.value;
+    const selectedDecade = elements.decadeSelect.value;
+    const minRating = parseFloat(elements.ratingSlider.value);
+    
+    // Попытка 1: С точными фильтрами
+    let movieId = await searchMovieWithFilters(selectedGenre, selectedDecade, minRating, true);
+    if (movieId) return movieId;
+    
+    // Попытка 2: Без ограничения по рейтингу
+    movieId = await searchMovieWithFilters(selectedGenre, selectedDecade, 0, true);
+    if (movieId) return movieId;
+    
+    // Попытка 3: Только по жанру (игнорируя год)
+    if (selectedGenre) {
+        movieId = await searchMovieWithFilters(selectedGenre, '', 0, true);
+        if (movieId) return movieId;
+    }
+    
+    // Если ничего не найдено - возвращаем null для показа fallback
+    return null;
+}
+
+/**
+ * Поиск фильма с указанными фильтрами
+ * @param {string} genre - ID жанра
+ * @param {string} decade - Десятилетие
+ * @param {number} minRating - Минимальный рейтинг
+ * @param {boolean} useGenreMapping - Использовать маппинг русских названий в ID
+ */
+async function searchMovieWithFilters(genre, decade, minRating, useGenreMapping = false) {
+    const params = new URLSearchParams({
+        api_key: apiKey,
+        language: LANGUAGE,
+        sort_by: 'popularity.desc',
+        'vote_count.gte': '50', // Минимальное количество голосов
+        include_adult: 'false'
+    });
+
+    // Add genre filter
+    if (genre) {
+        let genreId = genre;
+        // If using Russian genre names, convert to ID
+        if (useGenreMapping && GENRE_IDS[genre]) {
+            genreId = GENRE_IDS[genre];
+        }
+        params.append('with_genres', genreId);
+    }
+
+    // Add decade filter
+    if (decade) {
+        const startYear = decade;
+        const endYear = parseInt(decade) + 9;
+        params.append('primary_release_date.gte', `${startYear}-01-01`);
+        params.append('primary_release_date.lte', `${endYear}-12-31`);
+    }
+
+    // Add rating filter
+    if (minRating > 0) {
+        params.append('vote_average.gte', minRating);
+    }
+
+    // Get random page from 1 to 100
+    const randomPage = Math.floor(Math.random() * 100) + 1;
+    params.append('page', randomPage);
+
+    const discoverUrl = `${TMDB_BASE_URL}/discover/movie?${params.toString()}`;
+    const response = await fetch(discoverUrl);
+    const data = await response.json();
+
+    if (data.results && data.results.length > 0) {
+        const randomIndex = Math.floor(Math.random() * data.results.length);
+        return data.results[randomIndex].id;
+    }
+    
+    return null;
+}
+
+/**
+ * Показывает 5 случайных популярных фильмов как fallback
+ */
+async function showFallbackPopularMovies() {
+    hideLoader();
+    
+    const popularUrl = `${TMDB_BASE_URL}/movie/popular?api_key=${apiKey}&language=${LANGUAGE}&page=1`;
+    const response = await fetch(popularUrl);
+    const data = await response.json();
+    
+    if (data.results && data.results.length > 0) {
+        // Pick random movie from popular
+        const randomIndex = Math.floor(Math.random() * Math.min(5, data.results.length));
+        const movieId = data.results[randomIndex].id;
+        await loadMovieDetails(movieId);
+    } else {
+        showError('😕 К сожалению, ничего не найдено.<br><br><strong>Советы:</strong><br>• Попробуйте выбрать другой жанр<br>• Расширьте диапазон лет<br>• Уменьшите минимальный рейтинг');
     }
 }
 
