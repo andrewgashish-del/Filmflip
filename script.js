@@ -14,10 +14,6 @@ let currentMovie = null;
 
 // DOM Elements
 const elements = {
-    apiKeyModal: document.getElementById('apiKeyModal'),
-    apiKeyInput: document.getElementById('apiKeyInput'),
-    saveApiKeyBtn: document.getElementById('saveApiKeyBtn'),
-    skipApiBtn: document.getElementById('skipApiBtn'),
     genreSelect: document.getElementById('genreSelect'),
     decadeSelect: document.getElementById('decadeSelect'),
     ratingSlider: document.getElementById('ratingSlider'),
@@ -48,31 +44,13 @@ const elements = {
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
-    // Check if API key exists
-    if (!apiKey) {
-        elements.apiKeyModal.classList.remove('hidden');
-    } else {
-        elements.apiKeyModal.classList.add('hidden');
-        await loadGenres();
-    }
+    await loadGenres();
 
     // Setup event listeners
     setupEventListeners();
 }
 
 function setupEventListeners() {
-    // API Key modal
-    elements.saveApiKeyBtn.addEventListener('click', saveApiKey);
-    elements.skipApiBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        elements.apiKeyModal.classList.add('hidden');
-        elements.filtersSection.classList.add('hidden');
-        showError('⚠️ Демо-режим: Введите API ключ для полной функциональности');
-    });
-    elements.apiKeyInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') saveApiKey();
-    });
-
     // Rating slider
     elements.ratingSlider.addEventListener('input', (e) => {
         elements.ratingValue.textContent = e.target.value;
@@ -87,18 +65,6 @@ function setupEventListeners() {
     elements.trailerBtn.addEventListener('click', openTrailer);
     elements.expandOverviewBtn.addEventListener('click', toggleOverview);
     elements.shareBtn.addEventListener('click', shareMovie);
-}
-
-function saveApiKey() {
-    const key = elements.apiKeyInput.value.trim();
-    if (key) {
-        apiKey = key;
-        localStorage.setItem('tmdb_api_key', key);
-        elements.apiKeyModal.classList.add('hidden');
-        loadGenres();
-    } else {
-        alert('Пожалуйста, введите API ключ');
-    }
 }
 
 async function loadGenres() {
@@ -127,11 +93,6 @@ function populateGenreSelect() {
 }
 
 async function findMovie(isLucky = false) {
-    if (!apiKey) {
-        elements.apiKeyModal.classList.remove('hidden');
-        return;
-    }
-
     // Show loader, hide previous results
     showLoader();
     hideError();
